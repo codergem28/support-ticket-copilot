@@ -8,10 +8,14 @@ from openai import OpenAI
 load_dotenv()
 client = OpenAI(base_url=os.getenv("LLM_BASE_URL"), api_key=os.environ["LLM_API_KEY"])
 
+CHEAP = os.getenv("MODEL_CHEAP", "cheap")
+STRONG = os.getenv("MODEL_STRONG", "strong")
+
 # USD per 1 million tokens: (input price, output price).
 # Look up the real prices for YOUR model. Free tiers can stay at 0.
 PRICES = {
-    os.getenv("MODEL_CHEAP", "cheap"): (0.0, 0.0),
+    CHEAP: (0.0, 0.0),
+    STRONG: (0.0, 0.0),
 }
 
 
