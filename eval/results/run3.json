@@ -1,0 +1,24 @@
+{
+  "name": "run3",
+  "split": "dev",
+  "fraction": 0.5,
+  "rows": 43,
+  "errors": 4,
+  "cfg": {
+    "USE_HYBRID": true,
+    "USE_RERANK": true,
+    "USE_CACHE": false,
+    "USE_ROUTING": false
+  },
+  "hit_rate@5": 0.8857142857142857,
+  "mrr": 0.7295238095238095,
+  "faithfulness": 1.0,
+  "correctness": 0.8,
+  "deflection_rate": 0.5813953488372093,
+  "wrong_auto_reply_rate": 0.2,
+  "correct_escalation_rate": 1.0,
+  "cost_per_ticket_usd": 0.00023487558139534883,
+  "total_cost_usd": 0.01009965,
+  "p50_s": 3.315556999994442,
+  "p95_s": 12.029772400012007
+}

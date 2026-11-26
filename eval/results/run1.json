@@ -1,0 +1,24 @@
+{
+  "name": "run1",
+  "split": "dev",
+  "fraction": 0.5,
+  "rows": 47,
+  "errors": 0,
+  "cfg": {
+    "USE_HYBRID": false,
+    "USE_RERANK": false,
+    "USE_CACHE": false,
+    "USE_ROUTING": false
+  },
+  "hit_rate@5": 0.8717948717948718,
+  "mrr": 0.717948717948718,
+  "faithfulness": 0.9354838709677419,
+  "correctness": 0.8387096774193549,
+  "deflection_rate": 0.6595744680851063,
+  "wrong_auto_reply_rate": 0.1935483870967742,
+  "correct_escalation_rate": 1.0,
+  "cost_per_ticket_usd": 0.0003441191489361702,
+  "total_cost_usd": 0.0161736,
+  "p50_s": 7.284015500015812,
+  "p95_s": 14.577709000004688
+}

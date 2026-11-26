@@ -1,0 +1,59 @@
+services:
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # one-shot: fills the vector store from ./docs before the worker starts.
+  # Without it a fresh machine has an empty Chroma volume, so every ticket
+  # would be answered from no context.
+  ingest:
+    build: .
+    command: python -m app.ingest
+    env_file: .env
+    volumes:
+      - chroma:/app/data
+      - ./docs:/app/docs:ro
+    restart: "no"
+
+  api:
+    build: .
+    command: uvicorn app.api:app --host 0.0.0.0 --port 8000
+    env_file: .env
+    environment:
+      REDIS_HOST: redis
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    build: .
+    command: python -m app.worker
+    env_file: .env
+    environment:
+      REDIS_HOST: redis
+    volumes:
+      - chroma:/app/data
+      - ./docs:/app/docs:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      ingest:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  chroma:

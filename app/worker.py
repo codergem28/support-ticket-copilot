@@ -17,6 +17,7 @@ STREAM = "ticket.created"
 GROUP = "workers"
 DLQ = "ticket.dlq"          # the "dead-letter queue": where tickets go when they keep failing
 MAX_ATTEMPTS = 3
+CLAIM_IDLE_MS = 60_000      # a ticket unacked this long belongs to a worker that died
 ME = f"worker-{os.getpid()}"
 
 
@@ -41,26 +42,59 @@ def process(fields):
     r.xadd(event, {"ticket_id": ticket_id})        # announce the outcome as a new event
 
 
+def handle_message(message_id, fields):
+    attempt = int(fields.get("attempt", 0))
+    try:
+        process(fields)
+        print("done:", fields["ticket_id"])
+    except Exception as e:
+        print("failed:", fields.get("ticket_id"), "|", e)
+        if attempt + 1 >= MAX_ATTEMPTS:
+            r.xadd(DLQ, {**fields, "error": str(e)})            # give up, park it
+        else:
+            time.sleep(2 ** attempt)                            # wait 1s, then 2s
+            r.xadd(STREAM, {**fields, "attempt": attempt + 1})  # try again later
+    finally:
+        r.xack(STREAM, GROUP, message_id)                       # tell Redis we're done with this copy
+
+
+def claim_stale():
+    """Pick up tickets a previous worker read but never acknowledged (it crashed)."""
+    start = "0-0"
+    while True:
+        try:
+            start, messages, _ = r.xautoclaim(STREAM, GROUP, ME, CLAIM_IDLE_MS,
+                                             start_id=start, count=50)
+        except redis.ResponseError:
+            return
+        ready = [(mid, f) for mid, f in messages if f]
+        for message_id, fields in ready:
+            print("reclaiming:", fields.get("ticket_id"))
+            handle_message(message_id, fields)
+        if not ready or start in ("0-0", 0):
+            return
+
+
 def run():
     setup()
+    claim_stale()
     print(f"{ME} ready, waiting for tickets...")
     while True:
-        batches = r.xreadgroup(GROUP, ME, {STREAM: ">"}, count=5, block=BLOCK_MS) or []
+        try:
+            batches = r.xreadgroup(GROUP, ME, {STREAM: ">"}, count=5, block=BLOCK_MS) or []
+        except redis.RedisError as e:
+            # Redis restarted or the connection dropped: stay alive instead of
+            # crashing the container and leaving the group half-registered.
+            print("redis unavailable, retrying:", e)
+            time.sleep(2)
+            try:
+                setup()
+            except redis.RedisError:
+                pass
+            continue
         for _, messages in batches:
             for message_id, fields in messages:
-                attempt = int(fields.get("attempt", 0))
-                try:
-                    process(fields)
-                    print("done:", fields["ticket_id"])
-                except Exception as e:
-                    print("failed:", fields.get("ticket_id"), "|", e)
-                    if attempt + 1 >= MAX_ATTEMPTS:
-                        r.xadd(DLQ, {**fields, "error": str(e)})       # give up, park it
-                    else:
-                        time.sleep(2 ** attempt)                        # wait 1s, then 2s
-                        r.xadd(STREAM, {**fields, "attempt": attempt + 1})  # try again later
-                finally:
-                    r.xack(STREAM, GROUP, message_id)                   # tell Redis we're done with this copy
+                handle_message(message_id, fields)
 
 
 if __name__ == "__main__":
